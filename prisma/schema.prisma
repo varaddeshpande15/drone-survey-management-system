@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  missions      Mission[] // One-to-many: User can create multiple missions
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Drone {
+  id        String   @id @default(cuid())
+  model     String
+  status    String   @default("available") // available, in-mission, charging, maintenance
+  battery   Int      @default(100)
+  vitals    Json     // {signal: "strong", gps: 12, rssi: -45}
+  location  Json?    // {lat: 40.7128, lng: -74.006, alt: 0}
+  missions  Mission[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Mission {
+  id             String    @id @default(cuid())
+  title          String    @default("Untitled Mission")
+  description    String?   // Optional mission notes
+  
+  // GeoJSON data
+  area           Json?     // GeoJSON Polygon for survey area
+  waypoints      Json[]    // Array of {lat: number, lng: number, alt: number}
+  
+  // Mission parameters
+  params         Json      // {altitude: 100, overlap: 80, sensors: ["camera"], frequency: "5s", pattern: "crosshatch"}
+  
+  // Mission state
+  status         String    @default("planned") // planned, in-progress, paused, completed, aborted, cancelled
+  progress       Int       @default(0)
+  eta            String?   // "12min"
+  
+  // Completed mission stats
+  duration       String?   // "15min"
+  distance       Float?    // 2.5 km
+  coverage       Int?      // 95%
+  
+  // Relations
+  droneId        String?
+  drone          Drone?    @relation(fields: [droneId], references: [id])
+  userId         String?   // Who created the mission
+  user           User?     @relation(fields: [userId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
